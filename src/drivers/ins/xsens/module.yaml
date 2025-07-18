@@ -1,0 +1,71 @@
+module_name: Xsens INS (MTi-680G, MTi-670G, MTi-G-710, MTi-7, MTi-8)
+
+serial_config:
+  - command: xsens start -d ${SERIAL_DEV}
+    port_config_param:
+        name: SENS_XSENS_CFG
+        group: Sensors
+
+parameters:
+  - group: Sensors
+    definitions:
+        SENS_XSENS_MODE:
+            description:
+                short: Xsens INS driver mode
+                long: |
+                    Select operating mode for the Xsens device.
+
+                    0: Sensors Only - Publish raw sensor data (accelerometer, gyroscope, magnetometer)
+                    1: INS - Use as primary navigation source, disable EKF2
+            type: enum
+            values:
+                0: Sensors Only
+                1: INS
+            default: 1
+            category: Standard
+
+        SENS_XSENS_BAUD:
+            description:
+                short: Xsens INS baud rate
+                long: |
+                    Serial communication baud rate for the Xsens device.
+                    Must match the device configuration.
+            type: enum
+            values:
+                9600: 9600 baud
+                19200: 19200 baud
+                38400: 38400 baud
+                57600: 57600 baud
+                115200: 115200 baud
+                230400: 230400 baud
+                460800: 460800 baud
+                921600: 921600 baud
+                2000000: 2000000 baud
+            default: 115200
+            category: Standard
+
+        SENS_XSENS_ODR:
+            description:
+                short: Xsens INS output data rate
+                long: |
+                    Output data rate in Hz for the Xsens device.
+                    Max data rate for MTi-7/8 is 100Hz, while other Xsens INS models can have max 400Hz.
+            type: enum
+            values:
+                1: 1 Hz
+                2: 2 Hz
+                4: 4 Hz
+                5: 5 Hz
+                8: 8 Hz
+                10: 10 Hz
+                16: 16 Hz
+                20: 20 Hz
+                25: 25 Hz
+                40: 40 Hz
+                50: 50 Hz
+                80: 80 Hz
+                100: 100 Hz
+                200: 200 Hz
+                400: 400 Hz
+            default: 100
+            category: Standard

@@ -1,0 +1,5 @@
+menuconfig DRIVERS_INS_XSENS
+	bool "xsens"
+	default n
+	---help---
+		Enable support for Xsens INS (MTi-680G, MTi-670G, MTi-G-710, MTi-7, MTi-8)
