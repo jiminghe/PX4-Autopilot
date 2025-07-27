@@ -27,15 +27,27 @@ Xsens::Xsens(const char *port) :
 	// Configure for INS mode if selected
 	if (_param_xsens_mode.get() == 1) {
 		int32_t v = 0;
+		param_t param;
 
-		// Disable EKF2
-		v = 0;
-		param_set(param_find("EKF2_EN"), &v);
+		// Disable EKF2 (if it exists)
+		param = param_find("EKF2_EN");
+		if (param != PARAM_INVALID) {
+			param_set(param, &v);
+		} else {
+			PX4_WARN("EKF2_EN parameter not found - EKF2 may not be available in this build");
+		}
 
 		// Configure sensor selection
 		v = 0;
-		param_set(param_find("SENS_IMU_MODE"), &v);
-		param_set(param_find("SENS_MAG_MODE"), &v);
+		param = param_find("SENS_IMU_MODE");
+		if (param != PARAM_INVALID) {
+			param_set(param, &v);
+		}
+
+		param = param_find("SENS_MAG_MODE");
+		if (param != PARAM_INVALID) {
+			param_set(param, &v);
+		}
 	}
 
 	// Setup device ID with generic Xsens type
