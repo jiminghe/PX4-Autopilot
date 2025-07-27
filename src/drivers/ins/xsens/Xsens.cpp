@@ -1,12 +1,10 @@
 #include "Xsens.hpp"
-
-#include <lib/drivers/device/Device.hpp>
 #include <px4_platform_common/getopt.h>
 #include <drivers/drv_hrt.h>
 #include <matrix/math.hpp>
 #include <cstring>
-#include <lib/drivers/device/Device.hpp>
 #include <inttypes.h>
+
 
 using matrix::Vector2f;
 using matrix::Quatf;
@@ -22,6 +20,9 @@ Xsens::Xsens(const char *port) :
 	// Store port name
 	strncpy(_port, port, sizeof(_port) - 1);
 	_port[sizeof(_port) - 1] = '\0';
+
+	// Initialize serial pointer to nullptr (will be created in openSerialPort)
+	_serial = nullptr;
 
 	// Configure for INS mode if selected
 	if (_param_xsens_mode.get() == 1) {
@@ -39,7 +40,7 @@ Xsens::Xsens(const char *port) :
 
 	// Setup device ID with generic Xsens type
 	device::Device::DeviceId device_id{};
-	device_id.devid_s.devtype = DRV_INS_DEVTYPE_XSENS_GENERIC;
+	device_id.devid_s.devtype = DRV_INS_DEVTYPE_XSENS;
 	device_id.devid_s.bus_type = device::Device::DeviceBusType_SERIAL;
 
 	_px4_accel.set_device_id(device_id.devid);
@@ -54,97 +55,86 @@ Xsens::Xsens(const char *port) :
 
 Xsens::~Xsens()
 {
-	closeSerialPort();
+    closeSerialPort();
 
-	// Free performance counters
-	perf_free(_sample_perf);
-	perf_free(_comms_errors);
-	perf_free(_timeout_errors);
-	perf_free(_accel_pub_interval_perf);
-	perf_free(_gyro_pub_interval_perf);
-	perf_free(_mag_pub_interval_perf);
-	perf_free(_gnss_pub_interval_perf);
-	perf_free(_baro_pub_interval_perf);
-	perf_free(_attitude_pub_interval_perf);
-	perf_free(_local_position_pub_interval_perf);
-	perf_free(_global_position_pub_interval_perf);
+    // Free performance counters
+    perf_free(_sample_perf);
+    perf_free(_comms_errors);
+    perf_free(_timeout_errors);
+    perf_free(_accel_pub_interval_perf);
+    perf_free(_gyro_pub_interval_perf);
+    perf_free(_mag_pub_interval_perf);
+    perf_free(_gnss_pub_interval_perf);
+    perf_free(_baro_pub_interval_perf);
+    perf_free(_attitude_pub_interval_perf);
+    perf_free(_local_position_pub_interval_perf);
+    perf_free(_global_position_pub_interval_perf);
 }
 
-int Xsens::openSerialPort()
+bool Xsens::openSerialPort()
 {
-	// Open serial port with NuttX-compatible flags
-	_serial_fd = ::open(_port, O_RDWR | O_NOCTTY | O_NONBLOCK);
+    if (_serial != nullptr) {
+        PX4_ERR("Serial device already initialized. Close first.");
+        return false;
+    }
 
-	if (_serial_fd < 0) {
-		PX4_ERR("Failed to open port %s (errno: %d)", _port, errno);
-		return -1;
-	}
+    if (_port[0] == '\0') {
+        PX4_ERR("Empty serial device name");
+        return false;
+    }
 
-	// Configure serial port
-	struct termios portSettings;
-	memset(&portSettings, 0, sizeof(portSettings));
+    // Determine baud rate
+    int baudrate = 115200; // Default
+    switch (_param_xsens_baud.get()) {
+        case 9600:   baudrate = 9600;   break;
+        case 19200:  baudrate = 19200;  break;
+        case 38400:  baudrate = 38400;  break;
+        case 57600:  baudrate = 57600;  break;
+        case 115200: baudrate = 115200; break;
+        case 230400: baudrate = 230400; break;
+        case 460800: baudrate = 460800; break;
+        case 921600: baudrate = 921600; break;
+        default:     baudrate = 115200; break;
+    }
 
-	// Set baud rate using cfsetspeed (NuttX compatible)
-	speed_t baud_rate = B115200;
-	switch (_param_xsens_baud.get()) {
-		case 9600:   baud_rate = B9600;   break;
-		case 19200:  baud_rate = B19200;  break;
-		case 38400:  baud_rate = B38400;  break;
-		case 57600:  baud_rate = B57600;  break;
-		case 115200: baud_rate = B115200; break;
-		case 230400: baud_rate = B230400; break;
-		case 460800: baud_rate = B460800; break;
-		case 921600: baud_rate = B921600; break;
-		default:     baud_rate = B115200; break;
-	}
+    _serial = new device::Serial(_port, baudrate);
+    if (_serial == nullptr) {
+        PX4_ERR("Error creating serial device: %s", _port);
+        return false;
+    }
 
-	// Use cfsetspeed for NuttX compatibility
-	if (cfsetspeed(&portSettings, baud_rate) != 0) {
-		PX4_ERR("Failed to set baud rate");
-		closeSerialPort();
-		return -1;
-	}
+    if (!_serial->isOpen() && !_serial->open()) {
+        // Open the UART. If this is successful then the UART is ready to use.
+        if (!_serial->open()) {
+            PX4_ERR("Error opening serial device: %s", _port);
+            closeSerialPort();
+            return false;
+        }
 
-	// Configure port settings
-	// Set baudrate, 8n1, no modem control, enable receiving characters
-	portSettings.c_cflag |= CS8 | CLOCAL | CREAD;
+        PX4_INFO("Serial device opened successfully: %s", _port);
+        _serial->flush();
+    }
 
-	portSettings.c_iflag = IGNPAR;		// Ignore bytes with parity errors
-	portSettings.c_oflag = 0;			// Enable raw data output
-	portSettings.c_lflag = 0;			// Raw input
-	portSettings.c_cc[VTIME] = 0;		// Do not use inter-character timer
-	portSettings.c_cc[VMIN] = 0;		// Non-blocking reads
-
-	// Clear the COM port buffers
-	if (tcflush(_serial_fd, TCIFLUSH) != 0) {
-		PX4_WARN("Failed to flush serial port");
-	}
-
-	if (tcsetattr(_serial_fd, TCSANOW, &portSettings) != 0) {
-		PX4_ERR("Failed to set port attributes (errno: %d)", errno);
-		closeSerialPort();
-		return -1;
-	}
-
-	return 0;
+    return true;
 }
 
 void Xsens::closeSerialPort()
 {
-	if (_serial_fd >= 0) {
-		::close(_serial_fd);
-		_serial_fd = -1;
-	}
+    if (_serial) {
+        _serial->close();
+        delete _serial;
+        _serial = nullptr;
+    }
 }
 
 bool Xsens::writeMessage(const uint8_t *message, size_t length)
 {
-    if (_serial_fd < 0) {
+    if (_serial == nullptr) {
         PX4_ERR("Serial port not open");
         return false;
     }
 
-    ssize_t bytes_written = ::write(_serial_fd, message, length);
+    ssize_t bytes_written = _serial->write(message, length);
     if (bytes_written != (ssize_t)length) {
         PX4_ERR("Failed to write complete message: wrote %d of %zu bytes",
                 (int)bytes_written, length);
@@ -152,26 +142,18 @@ bool Xsens::writeMessage(const uint8_t *message, size_t length)
         return false;
     }
 
-    // Force flush the data (important for NuttX)
-    fsync(_serial_fd);
-
-    // Small delay to ensure message is sent
-    px4_usleep(10000); // 10ms delay
-
     return true;
 }
 
 size_t Xsens::readData(uint8_t *buffer, size_t max_length)
 {
-    if (_serial_fd < 0) {
+    if (_serial == nullptr) {
         return 0;
     }
 
-    ssize_t bytes_read = ::read(_serial_fd, buffer, max_length);
+    ssize_t bytes_read = _serial->read(buffer, max_length);
     if (bytes_read < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            PX4_DEBUG("Read error: %d", errno);
-        }
+        PX4_DEBUG("Read error from serial device");
         return 0;
     }
 
@@ -180,7 +162,7 @@ size_t Xsens::readData(uint8_t *buffer, size_t max_length)
 
 bool Xsens::init()
 {
-    if (openSerialPort() != 0) {
+    if (!openSerialPort()) {
         return false;
     }
 
@@ -349,10 +331,10 @@ bool Xsens::configureOutputSettings()
 	return writeMessage(config_msg, Xbus::getRawLength(config_msg));
 }
 
-bool Xsens::configureAlignmentRotationSetting(int frame)
+bool Xsens::setNedFrame()
 {
 	// Send rotlocal: FA FF EC 11 01 00 00 00 00 3F 35 04 F4 3F 35 04 F4 00 00 00 00 2B
-	//send rotsensor: FA FF EC 11 00 00 00 00 00 3F 35 04 F4 3F 35 04 F4 00 00 00 00 2C
+	// send rotsensor: FA FF EC 11 00 00 00 00 00 3F 35 04 F4 3F 35 04 F4 00 00 00 00 2C
 	uint8_t config_msg[22];
 	Xbus::createMessage(config_msg, 0xFF, XMID_SetAlignmentRotation, 0);
 
@@ -360,7 +342,7 @@ bool Xsens::configureAlignmentRotationSetting(int frame)
 	int payload_idx = 0;
 
 	// First byte: 01 means RotLocal frame.
-	payload[payload_idx++] = frame;
+	payload[payload_idx++] = 0x01;
 
 	// quaternion w, 0.0
 	payload[payload_idx++] = 0x00;
@@ -388,6 +370,86 @@ bool Xsens::configureAlignmentRotationSetting(int frame)
 	Xbus::insertChecksum(config_msg);
 
 	return writeMessage(config_msg, Xbus::getRawLength(config_msg));
+}
+
+
+bool Xsens::setSensorFrame(bool isUp)
+{
+	if (isUp)
+	{
+		uint8_t config_msg[22];
+		Xbus::createMessage(config_msg, 0xFF, XMID_SetAlignmentRotation, 0);
+
+		uint8_t *payload = Xbus::getPointerToPayload(config_msg);
+		int payload_idx = 0;
+
+		// 0x00 means RotSensor frame.
+		payload[payload_idx++] = 0x00;
+
+		// quaternion w, 0.0
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// quaternion x, 1.0, rotation around x axis for 180deg if sensor is Upwards in NED frame.
+		payload[payload_idx++] = 0x3F;
+		payload[payload_idx++] = 0x80;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// quaternion y, 0.0
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// quaternion z, 0.0
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// Update payload length and add checksum
+		Xbus::setPayloadLength(config_msg, payload_idx);
+		Xbus::insertChecksum(config_msg);
+
+		return writeMessage(config_msg, Xbus::getRawLength(config_msg));
+	}
+	else
+	{
+		uint8_t config_msg[22];
+		Xbus::createMessage(config_msg, 0xFF, XMID_SetAlignmentRotation, 0);
+
+		uint8_t *payload = Xbus::getPointerToPayload(config_msg);
+		int payload_idx = 0;
+
+		// 0x00 means RotSensor frame.
+		payload[payload_idx++] = 0x00;
+
+		// quaternion w, 1.0
+		payload[payload_idx++] = 0x3F;
+		payload[payload_idx++] = 0x80;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// quaternion x, 0.0
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// quaternion y, 0.0
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// quaternion z, 0.0
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		payload[payload_idx++] = 0x00;
+		// Update payload length and add checksum
+		Xbus::setPayloadLength(config_msg, payload_idx);
+		Xbus::insertChecksum(config_msg);
+
+		return writeMessage(config_msg, Xbus::getRawLength(config_msg));
+	}
+
 }
 
 bool Xsens::gotoMeasurementMode()
@@ -477,11 +539,11 @@ void Xsens::updateStateMachine()
             break;
 
         case DeviceState::CONFIGURING_ROTLOCAL:
-            PX4_INFO("Sending rotlocal configuration");
-            if (configureAlignmentRotationSetting(0x00)) {
+            PX4_INFO("Sending rotlocal to NED frame");
+            if (setNedFrame()) {
                 setState(DeviceState::WAITING_FOR_ROTLOCAL_CONFIG);
             } else {
-                PX4_ERR("Failed to send rotlocal configuration");
+                PX4_ERR("Failed to send rotlocal to NED frame");
                 setState(DeviceState::ERROR);
             }
             break;
@@ -490,13 +552,18 @@ void Xsens::updateStateMachine()
             // Wait for rotlocal configuration acknowledgment
             break;
 
-	case DeviceState::CONFIGURING_ROTSENSOR:
-            PX4_INFO("Sending rotsensor configuration");
-            if (configureAlignmentRotationSetting(0x01)) {
-                setState(DeviceState::WAITING_FOR_ROTSENSOR_CONFIG);
-            } else {
-                PX4_ERR("Failed to send rotsensor configuration");
-                setState(DeviceState::ERROR);
+        case DeviceState::CONFIGURING_ROTSENSOR:
+            {
+                // Use the orientation parameter to determine if sensor is facing up or down
+                bool sensor_upwards = (_param_xsens_orient.get() == 1);
+                PX4_INFO("Sending rotsensor configuration for %s orientation",
+                         sensor_upwards ? "upwards" : "downwards");
+                if (setSensorFrame(sensor_upwards)) {
+                    setState(DeviceState::WAITING_FOR_ROTSENSOR_CONFIG);
+                } else {
+                    PX4_ERR("Failed to send rotsensor configuration");
+                    setState(DeviceState::ERROR);
+                }
             }
             break;
 
@@ -776,39 +843,56 @@ void Xsens::publishAttitude(const SensorData &data)
 
 void Xsens::publishLocalPosition(const SensorData &data)
 {
+	hrt_abstime timestamp = hrt_absolute_time();
+
 	// Initialize position reference if needed
 	if (!_pos_ref.isInitialized()) {
-		_pos_ref.initReference(data.latLon.latitude, data.latLon.longitude, hrt_absolute_time());
+		_pos_ref.initReference(data.latLon.latitude, data.latLon.longitude, timestamp);
 		_gps_alt_ref = static_cast<float>(data.altitudeEllipsoid);
 	}
 
 	Vector2f pos_ned = _pos_ref.project(data.latLon.latitude, data.latLon.longitude);
 
 	vehicle_local_position_s local_pos{};
-	local_pos.timestamp_sample = hrt_absolute_time();
+	local_pos.timestamp = timestamp;
+	local_pos.timestamp_sample = timestamp;
+
+	// Position validity
 	local_pos.xy_valid = true;
 	local_pos.z_valid = true;
 	local_pos.v_xy_valid = data.hasVelocityXYZ;
 	local_pos.v_z_valid = data.hasVelocityXYZ;
 
+	// Position in NED frame
 	local_pos.x = pos_ned(0);
 	local_pos.y = pos_ned(1);
-	local_pos.z = -(static_cast<float>(data.altitudeEllipsoid) - _gps_alt_ref);
+	local_pos.z = -(static_cast<float>(data.altitudeEllipsoid) - _gps_alt_ref);  // NED down is positive
 
+	// Velocity in NED frame
 	if (data.hasVelocityXYZ) {
 		local_pos.vx = static_cast<float>(data.velocityXYZ.velX);
 		local_pos.vy = static_cast<float>(data.velocityXYZ.velY);
 		local_pos.vz = static_cast<float>(data.velocityXYZ.velZ);
 	}
 
+	// Acceleration in NED frame
+	if (data.hasAcceleration) {
+		local_pos.ax = static_cast<float>(data.acceleration.accX);
+		local_pos.ay = static_cast<float>(data.acceleration.accY);
+		local_pos.az = static_cast<float>(data.acceleration.accZ);
+	}
+
+	// Heading
 	if (data.hasQuaternion) {
 		// Convert quaternion to yaw angle
 		Quatf q(data.quaternion.q0, data.quaternion.q1, data.quaternion.q2, data.quaternion.q3);
 		Eulerf euler(q);
 		local_pos.heading = euler.psi();
+		local_pos.unaided_heading = NAN;
 		local_pos.heading_good_for_control = true;
 	}
 
+	// Reference frame information
 	if (_pos_ref.isInitialized()) {
 		local_pos.xy_global = true;
 		local_pos.z_global = true;
@@ -818,19 +902,47 @@ void Xsens::publishLocalPosition(const SensorData &data)
 		local_pos.ref_alt = _gps_alt_ref;
 	}
 
-	local_pos.timestamp = hrt_absolute_time();
+	// Distance to bottom (not available from Xsens)
+	local_pos.dist_bottom_valid = false;
+
+	// Dead reckoning
+	local_pos.dead_reckoning = false;
+
+	// Velocity and altitude limits (set to infinity - no limits)
+	local_pos.vxy_max = INFINITY;
+	local_pos.vz_max = INFINITY;
+	local_pos.hagl_min = INFINITY;
+	local_pos.hagl_max_z = INFINITY;
+	local_pos.hagl_max_xy = INFINITY;
+
 	_local_position_pub.publish(local_pos);
 	perf_count(_local_position_pub_interval_perf);
 }
 
 void Xsens::publishGlobalPosition(const SensorData &data)
 {
+	hrt_abstime timestamp = hrt_absolute_time();
+
 	vehicle_global_position_s global_pos{};
-	global_pos.timestamp_sample = hrt_absolute_time();
+	global_pos.timestamp = timestamp;
+	global_pos.timestamp_sample = timestamp;
+
+	// Position validity
+	global_pos.lat_lon_valid = true;
+	global_pos.alt_valid = true;
+
+	// Position data
 	global_pos.lat = data.latLon.latitude;
 	global_pos.lon = data.latLon.longitude;
-	global_pos.alt_ellipsoid = data.altitudeEllipsoid;
-	global_pos.timestamp = hrt_absolute_time();
+	global_pos.alt = static_cast<float>(data.altitudeEllipsoid);
+	global_pos.alt_ellipsoid = static_cast<float>(data.altitudeEllipsoid);
+
+	// Dead reckoning status
+	global_pos.dead_reckoning = false;
+
+	// Terrain altitude (not available from Xsens)
+	global_pos.terrain_alt = NAN;
+	global_pos.terrain_alt_valid = false;
 
 	_global_position_pub.publish(global_pos);
 	perf_count(_global_position_pub_interval_perf);

@@ -69,3 +69,20 @@ parameters:
                 400: 400 Hz
             default: 100
             category: Standard
+
+        SENS_XSENS_ORIEN:
+            description:
+                short: Xsens INS sensor orientation
+                long: |
+                    Physical installation orientation of the Xsens sensor.
+                    This parameter configures the sensor frame rotation to match
+                    the physical mounting orientation.
+
+                    0: Downwards - Sensor is mounted facing downwards
+                    1: Upwards - Sensor is mounted facing upwards
+            type: enum
+            values:
+                0: Downwards
+                1: Upwards
+            default: 1
+            category: Standard

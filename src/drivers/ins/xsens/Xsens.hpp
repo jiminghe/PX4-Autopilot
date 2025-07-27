@@ -39,6 +39,7 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_odometry.h>
 #include <drivers/drv_sensor.h>
+#include <px4_platform_common/Serial.hpp>
 
 using namespace time_literals;
 
@@ -80,7 +81,7 @@ private:
 	void Run() override;
 
 	// Serial communication
-	int openSerialPort();
+	bool openSerialPort();
 	void closeSerialPort();
 	bool writeMessage(const uint8_t *message, size_t length);
 	size_t readData(uint8_t *buffer, size_t max_length);
@@ -95,7 +96,8 @@ private:
 	// Device configuration
 	bool gotoConfigMode();
 	bool configureOutputSettings();
-	bool configureAlignmentRotationSetting(int frame);
+	bool setNedFrame();
+	bool setSensorFrame(bool isUp);
 	bool gotoMeasurementMode();
 
 	// State machine
@@ -128,8 +130,8 @@ private:
 	static constexpr float sq(float var) { return var * var; }
 
 	// Member variables
+	device::Serial *_serial{nullptr};
 	char _port[20] {};
-	int _serial_fd{-1};
 	DeviceState _state{DeviceState::ENTERING_CONFIG_MODE};
 
 	bool _initialized{false};
@@ -191,6 +193,7 @@ private:
 	DEFINE_PARAMETERS(
 		(ParamInt<px4::params::SENS_XSENS_MODE>) _param_xsens_mode,
 		(ParamInt<px4::params::SENS_XSENS_BAUD>) _param_xsens_baud,
-		(ParamInt<px4::params::SENS_XSENS_ODR>) _param_xsens_odr
+		(ParamInt<px4::params::SENS_XSENS_ODR>) _param_xsens_odr,
+		(ParamInt<px4::params::SENS_XSENS_ORIEN>) _param_xsens_orient
 	)
 };
