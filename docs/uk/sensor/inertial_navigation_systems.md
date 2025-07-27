@@ -7,6 +7,7 @@ However PX4 can also use some INS devices as either sources of raw data, or as a
 Системи, які можуть бути використані у такий спосіб, включають в себе:
 
 - [VectorNav](../sensor/vectornav.md): ІВП/AHRS, ССН/INS, Dual GNSS/INS системи, котрі можуть бути використані як зовнішній INS, або джерело вхідної інформації датчиків.
+* [Xsens](../sensor/xsens.md): GNSS/INS системи, котрі можуть бути використані як зовнішній INS або як джерело вхідної інформації датчиків.
 
 ## Словник
 

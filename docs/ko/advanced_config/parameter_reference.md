@@ -23524,6 +23524,106 @@ table {
  <td></td>
 </tr>
 <tr>
+<tr>
+ <td><strong id="SENS_XSENS_BAUD">SENS_XSENS_BAUD</strong> (INT32)</td>
+ <td>Baud rate for serial communication with the Xsens INS device.
+ <p><strong>Comment:</strong> This must match the baud rate configured on the hardware. For high data rates (e.g., 400Hz output), a higher baud rate such as <code>921600</code> or <code>2000000</code> is recommended.</p>
+ <strong>Values:</strong><ul>
+  <li><strong>9600:</strong> 9600 baud</li>
+  <li><strong>19200:</strong> 19200 baud</li>
+  <li><strong>38400:</strong> 38400 baud</li>
+  <li><strong>57600:</strong> 57600 baud</li>
+  <li><strong>115200:</strong> 115200 baud (default)</li>
+  <li><strong>230400:</strong> 230400 baud</li>
+  <li><strong>460800:</strong> 460800 baud</li>
+  <li><strong>921600:</strong> 921600 baud</li>
+  <li><strong>2000000:</strong> 2000000 baud</li>
+ </ul>
+ <p><b>Reboot required:</b> true</p>
+ </td>
+ <td>baud</td>
+ <td>115200</td>
+ <td></td>
+</tr>
+<tr>
+ <td><strong id="SENS_XSENS_CFG">SENS_XSENS_CFG</strong> (INT32)</td>
+ <td>Serial Configuration for Xsens INS (MTi-680G, MTi-670G, MTi-G-710, MTi-7, MTi-8)
+ <p><strong>Comment:</strong> Configure on which serial port to run Xsens INS (MTi-680G, MTi-670G, MTi-G-710, MTi-7, MTi-8).</p>
+ <strong>Values:</strong><ul>
+  <li><strong>0:</strong> Disabled</li>
+  <li><strong>6:</strong> UART 6</li>
+  <li><strong>101:</strong> TELEM 1</li>
+  <li><strong>102:</strong> TELEM 2</li>
+  <li><strong>103:</strong> TELEM 3</li>
+  <li><strong>104:</strong> TELEM/SERIAL 4</li>
+  <li><strong>201:</strong> GPS 1</li>
+  <li><strong>202:</strong> GPS 2</li>
+  <li><strong>203:</strong> GPS 3</li>
+  <li><strong>300:</strong> Radio Controller</li>
+  <li><strong>301:</strong> Wifi Port</li>
+  <li><strong>401:</strong> EXT2</li>
+ </ul>
+ <p><b>Reboot required:</b> true</p>
+ </td>
+ <td></td>
+ <td>0</td>
+ <td></td>
+</tr>
+<tr>
+ <td><strong id="SENS_XSENS_MODE">SENS_XSENS_MODE</strong> (INT32)</td>
+ <td>Xsens INS driver operating mode.
+ <p><strong>Comment:</strong> Select whether the Xsens device provides full navigation data (INS mode) or only raw sensor data (Sensors Only mode). INS mode disables EKF2 and uses Xsens as the primary estimator. Sensors Only mode forwards IMU, barometer, and magnetometer data to PX4's internal estimator.</p>
+ <strong>Values:</strong><ul>
+  <li><strong>0:</strong> Sensors Only – Raw data only</li>
+  <li><strong>1:</strong> INS – Full navigation output (default)</li>
+ </ul>
+ <p><b>Reboot required:</b> true</p>
+ </td>
+ <td></td>
+ <td>1</td>
+ <td></td>
+</tr>
+<tr>
+ <td><strong id="SENS_XSENS_ODR">SENS_XSENS_ODR</strong> (INT32)</td>
+ <td>Output data rate (ODR) of the Xsens INS device in Hz.
+ <p><strong>Comment:</strong> This controls how frequently the Xsens device sends sensor or navigation data. MTi-7/8 support up to 100 Hz; MTi-G-710, MTi-670(G), and MTi-680(G) support up to 400 Hz.</p>
+ <strong>Values:</strong><ul>
+  <li><strong>1:</strong> 1 Hz</li>
+  <li><strong>2:</strong> 2 Hz</li>
+  <li><strong>4:</strong> 4 Hz</li>
+  <li><strong>5:</strong> 5 Hz</li>
+  <li><strong>8:</strong> 8 Hz</li>
+  <li><strong>10:</strong> 10 Hz</li>
+  <li><strong>16:</strong> 16 Hz</li>
+  <li><strong>20:</strong> 20 Hz</li>
+  <li><strong>25:</strong> 25 Hz</li>
+  <li><strong>40:</strong> 40 Hz</li>
+  <li><strong>50:</strong> 50 Hz</li>
+  <li><strong>80:</strong> 80 Hz</li>
+  <li><strong>100:</strong> 100 Hz (default)</li>
+  <li><strong>200:</strong> 200 Hz</li>
+  <li><strong>400:</strong> 400 Hz</li>
+ </ul>
+ <p><b>Reboot required:</b> true</p>
+ </td>
+ <td>Hz</td>
+ <td>100</td>
+ <td></td>
+</tr>
+<tr>
+ <td><strong id="SENS_XSENS_ORIEN">SENS_XSENS_ORIEN</strong> (INT32)</td>
+ <td>Physical mounting orientation of the Xsens sensor.
+ <p><strong>Comment:</strong> Adjusts the coordinate frame transformation based on how the sensor is installed on the platform.</p>
+ <strong>Values:</strong><ul>
+  <li><strong>0:</strong> Downwards – Sensor is mounted facing down</li>
+  <li><strong>1:</strong> Upwards – Sensor is mounted facing up (default)</li>
+ </ul>
+ <p><b>Reboot required:</b> true</p>
+ </td>
+ <td></td>
+ <td>1</td>
+ <td></td>
+</tr>
  <td><strong id="SF45_ORIENT_CFG">SF45_ORIENT_CFG</strong> (INT32)</td>
  <td>Orientation upright or facing downward <p><strong>Comment:</strong> The SF45 mounted facing upward or downward on the frame</p> <strong>Values:</strong><ul>
 <li><strong>0:</strong> Rotation upward</li>

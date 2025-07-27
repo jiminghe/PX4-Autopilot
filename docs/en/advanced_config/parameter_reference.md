@@ -34143,6 +34143,117 @@ Configure on which serial port to run VectorNav (VN-100, VN-200, VN-300).
 | ------- | -------- | -------- | --------- | ------- | ---- |
 | &check; |          |          |           | 0       |
 
+### SENS_XSENS_BAUD (`INT32`) {#SENS_XSENS_BAUD}
+
+Baud rate for serial communication with the Xsens INS device.
+
+This must match the baud rate configured on the hardware.
+For high data rates (e.g., 400Hz output), a higher baud rate such as `921600` or `2000000` is recommended.
+
+**Values:**
+
+* `9600`: 9600 baud
+* `19200`: 19200 baud
+* `38400`: 38400 baud
+* `57600`: 57600 baud
+* `115200`: 115200 baud *(default)*
+* `230400`: 230400 baud
+* `460800`: 460800 baud
+* `921600`: 921600 baud
+* `2000000`: 2000000 baud
+
+| Reboot | minValue | maxValue | increment | default | unit |
+| ------ | -------- | -------- | --------- | ------- | ---- |
+| ✓      | 9600     | 2000000  |           | 115200  | baud |
+
+### SENS_XSENS_CFG (`INT32`) {#SENS_XSENS_CFG}
+
+Serial Configuration for Xsens INS (MTi-680G, MTi-670G, MTi-G-710, MTi-7, MTi-8).
+
+Configure on which serial port to run Xsens INS (MTi-680G, MTi-670G, MTi-G-710, MTi-7, MTi-8).
+
+**Values:**
+
+- `0`: Disabled
+- `6`: UART 6
+- `101`: TELEM 1
+- `102`: TELEM 2
+- `103`: TELEM 3
+- `104`: TELEM/SERIAL 4
+- `201`: GPS 1
+- `202`: GPS 2
+- `203`: GPS 3
+- `300`: Radio Controller
+- `301`: Wifi Port
+- `401`: EXT2
+
+| Reboot  | minValue | maxValue | increment | default | unit |
+| ------- | -------- | -------- | --------- | ------- | ---- |
+| &check; |          |          |           | 0       |
+
+### SENS_XSENS_MODE (`INT32`) {#SENS_XSENS_MODE}
+
+Xsens INS(MTi-7, MTi-8, MTi-670(G), MTi-680(G), MTi-G-710) driver operating mode.
+
+Select whether the Xsens device provides full navigation data (INS mode) or only raw sensor data (Sensors Only mode).
+INS mode disables EKF2 and uses Xsens as the primary estimator.
+Sensors Only mode forwards IMU, barometer, and magnetometer data to PX4's internal estimator.
+
+**Values:**
+
+* `0`: Sensors Only – Raw data only (accelerometer, gyroscope, magnetometer)
+* `1`: INS – Full navigation output (position, velocity, attitude)
+
+| Reboot | minValue | maxValue | increment | default | unit |
+| ------ | -------- | -------- | --------- | ------- | ---- |
+| ✓      | 0        | 1        | 1         | 1       |      |
+
+
+### SENS_XSENS_ODR (`INT32`) {#SENS_XSENS_ODR}
+
+Output data rate (ODR) of the Xsens INS device in Hz.
+
+This controls how frequently the Xsens device sends sensor or navigation data.
+MTi-7/8 support up to `100 Hz`.
+MTi-G-710, MTi-670(G), and MTi-680(G) support up to `400 Hz`.
+
+**Values:**
+
+* `1`: 1 Hz
+* `2`: 2 Hz
+* `4`: 4 Hz
+* `5`: 5 Hz
+* `8`: 8 Hz
+* `10`: 10 Hz
+* `16`: 16 Hz
+* `20`: 20 Hz
+* `25`: 25 Hz
+* `40`: 40 Hz
+* `50`: 50 Hz
+* `80`: 80 Hz
+* `100`: 100 Hz *(default)*
+* `200`: 200 Hz
+* `400`: 400 Hz
+
+| Reboot | minValue | maxValue | increment | default | unit |
+| ------ | -------- | -------- | --------- | ------- | ---- |
+| ✓      | 1        | 400      |           | 100     | Hz   |
+
+### SENS_XSENS_ORIEN (`INT32`) {#SENS_XSENS_ORIEN}
+
+Physical mounting orientation of the Xsens sensor.
+
+This parameter adjusts the coordinate frame transformation based on how the sensor is installed on the platform.
+
+**Values:**
+
+* `0`: Downwards – Sensor is mounted facing down
+* `1`: Upwards – Sensor is mounted facing up *(default)*
+
+| Reboot | minValue | maxValue | increment | default | unit |
+| ------ | -------- | -------- | --------- | ------- | ---- |
+| ✓      | 0        | 1        | 1         | 1       |      |
+
 ### SF45_ORIENT_CFG (`INT32`) {#SF45_ORIENT_CFG}
 
 Orientation upright or facing downward.
