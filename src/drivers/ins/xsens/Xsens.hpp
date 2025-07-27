@@ -126,6 +126,9 @@ private:
 	// GPS fix type determination
 	uint8_t determineFixType(uint32_t status);
 
+	void createPublishers();
+    	bool _publishers_created{false};
+
 	// return the square of two floating point numbers
 	static constexpr float sq(float var) { return var * var; }
 
@@ -169,9 +172,9 @@ private:
 	uORB::PublicationMulti<sensor_gps_s> _sensor_gps_pub{ORB_ID(sensor_gps)};
 	uORB::Publication<sensor_selection_s> _sensor_selection_pub{ORB_ID(sensor_selection)};
 
-	uORB::PublicationMulti<vehicle_attitude_s> _attitude_pub;
-	uORB::PublicationMulti<vehicle_local_position_s> _local_position_pub;
-	uORB::PublicationMulti<vehicle_global_position_s> _global_position_pub;
+	uORB::PublicationMulti<vehicle_attitude_s> *_attitude_pub{nullptr};
+	uORB::PublicationMulti<vehicle_local_position_s> *_local_position_pub{nullptr};
+	uORB::PublicationMulti<vehicle_global_position_s> *_global_position_pub{nullptr};
 	uORB::Publication<estimator_status_s> _estimator_status_pub{ORB_ID(estimator_status)};
 
 	// Performance counters

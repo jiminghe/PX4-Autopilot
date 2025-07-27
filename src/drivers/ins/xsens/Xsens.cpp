@@ -12,10 +12,7 @@ using matrix::Eulerf;
 
 Xsens::Xsens(const char *port) :
 	ModuleParams(nullptr),
-	ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port)),
-	_attitude_pub((_param_xsens_mode.get() == 0) ? ORB_ID(external_ins_attitude) : ORB_ID(vehicle_attitude)),
-	_local_position_pub((_param_xsens_mode.get() == 0) ? ORB_ID(external_ins_local_position) : ORB_ID(vehicle_local_position)),
-	_global_position_pub((_param_xsens_mode.get() == 0) ? ORB_ID(external_ins_global_position) : ORB_ID(vehicle_global_position))
+	ScheduledWorkItem(MODULE_NAME, px4::serial_port_to_wq(port))
 {
 	// Store port name
 	strncpy(_port, port, sizeof(_port) - 1);
@@ -23,32 +20,6 @@ Xsens::Xsens(const char *port) :
 
 	// Initialize serial pointer to nullptr (will be created in openSerialPort)
 	_serial = nullptr;
-
-	// Configure for INS mode if selected
-	if (_param_xsens_mode.get() == 1) {
-		int32_t v = 0;
-		param_t param;
-
-		// Disable EKF2 (if it exists)
-		param = param_find("EKF2_EN");
-		if (param != PARAM_INVALID) {
-			param_set(param, &v);
-		} else {
-			PX4_WARN("EKF2_EN parameter not found - EKF2 may not be available in this build");
-		}
-
-		// Configure sensor selection
-		v = 0;
-		param = param_find("SENS_IMU_MODE");
-		if (param != PARAM_INVALID) {
-			param_set(param, &v);
-		}
-
-		param = param_find("SENS_MAG_MODE");
-		if (param != PARAM_INVALID) {
-			param_set(param, &v);
-		}
-	}
 
 	// Setup device ID with generic Xsens type
 	device::Device::DeviceId device_id{};
@@ -58,16 +29,25 @@ Xsens::Xsens(const char *port) :
 	_px4_accel.set_device_id(device_id.devid);
 	_px4_gyro.set_device_id(device_id.devid);
 	_px4_mag.set_device_id(device_id.devid);
-
-	// Advertise publications
-	_attitude_pub.advertise();
-	_local_position_pub.advertise();
-	_global_position_pub.advertise();
 }
 
 Xsens::~Xsens()
 {
     closeSerialPort();
+
+    // Clean up publishers
+    if (_attitude_pub) {
+        delete _attitude_pub;
+        _attitude_pub = nullptr;
+    }
+    if (_local_position_pub) {
+        delete _local_position_pub;
+        _local_position_pub = nullptr;
+    }
+    if (_global_position_pub) {
+        delete _global_position_pub;
+        _global_position_pub = nullptr;
+    }
 
     // Free performance counters
     perf_free(_sample_perf);
@@ -82,6 +62,62 @@ Xsens::~Xsens()
     perf_free(_local_position_pub_interval_perf);
     perf_free(_global_position_pub_interval_perf);
 }
+
+void Xsens::createPublishers()
+{
+    if (_publishers_created) {
+        return; // Already created
+    }
+
+    // Now parameters are loaded, so _param_xsens_mode.get() returns correct value
+    PX4_INFO("Creating publishers for mode %" PRId32, _param_xsens_mode.get());
+
+    if (_param_xsens_mode.get() == 0) {
+        // External INS mode
+        _attitude_pub = new uORB::PublicationMulti<vehicle_attitude_s>(ORB_ID(external_ins_attitude));
+        _local_position_pub = new uORB::PublicationMulti<vehicle_local_position_s>(ORB_ID(external_ins_local_position));
+        _global_position_pub = new uORB::PublicationMulti<vehicle_global_position_s>(ORB_ID(external_ins_global_position));
+        PX4_INFO("Created external INS publishers");
+    } else {
+        // Primary INS mode
+        _attitude_pub = new uORB::PublicationMulti<vehicle_attitude_s>(ORB_ID(vehicle_attitude));
+        _local_position_pub = new uORB::PublicationMulti<vehicle_local_position_s>(ORB_ID(vehicle_local_position));
+        _global_position_pub = new uORB::PublicationMulti<vehicle_global_position_s>(ORB_ID(vehicle_global_position));
+        PX4_INFO("Created primary INS publishers");
+
+        // Configure for INS mode
+        int32_t v = 0;
+        param_t param;
+
+        // Disable EKF2 (if it exists)
+        param = param_find("EKF2_EN");
+        if (param != PARAM_INVALID) {
+            param_set(param, &v);
+        } else {
+            PX4_WARN("EKF2_EN parameter not found - EKF2 may not be available in this build");
+        }
+
+        // Configure sensor selection
+        v = 0;
+        param = param_find("SENS_IMU_MODE");
+        if (param != PARAM_INVALID) {
+            param_set(param, &v);
+        }
+
+        param = param_find("SENS_MAG_MODE");
+        if (param != PARAM_INVALID) {
+            param_set(param, &v);
+        }
+    }
+
+    // Advertise all publishers
+    _attitude_pub->advertise();
+    _local_position_pub->advertise();
+    _global_position_pub->advertise();
+
+    _publishers_created = true;
+}
+
 
 bool Xsens::openSerialPort()
 {
@@ -837,24 +873,27 @@ void Xsens::publishSensorData(const SensorData &data)
 
 void Xsens::publishAttitude(const SensorData &data)
 {
-	// Use quaternion directly from Xsens data
-	vehicle_attitude_s attitude{};
-	attitude.timestamp_sample = hrt_absolute_time();
+    if (!_attitude_pub) return;
 
-	// Xsens quaternion format: q0=w, q1=x, q2=y, q3=z
-	attitude.q[0] = data.quaternion.q0;  // w
-	attitude.q[1] = data.quaternion.q1;  // x
-	attitude.q[2] = data.quaternion.q2;  // y
-	attitude.q[3] = data.quaternion.q3;  // z
+    vehicle_attitude_s attitude{};
+    attitude.timestamp_sample = hrt_absolute_time();
 
-	attitude.timestamp = hrt_absolute_time();
+    // Xsens quaternion format: q0=w, q1=x, q2=y, q3=z
+    attitude.q[0] = data.quaternion.q0;  // w
+    attitude.q[1] = data.quaternion.q1;  // x
+    attitude.q[2] = data.quaternion.q2;  // y
+    attitude.q[3] = data.quaternion.q3;  // z
 
-	_attitude_pub.publish(attitude);
-	perf_count(_attitude_pub_interval_perf);
+    attitude.timestamp = hrt_absolute_time();
+
+    _attitude_pub->publish(attitude);
+    perf_count(_attitude_pub_interval_perf);
 }
 
 void Xsens::publishLocalPosition(const SensorData &data)
 {
+	if (!_local_position_pub) return;
+
 	hrt_abstime timestamp = hrt_absolute_time();
 
 	// Initialize position reference if needed
@@ -927,12 +966,14 @@ void Xsens::publishLocalPosition(const SensorData &data)
 	local_pos.hagl_max_z = INFINITY;
 	local_pos.hagl_max_xy = INFINITY;
 
-	_local_position_pub.publish(local_pos);
+	_local_position_pub->publish(local_pos);
 	perf_count(_local_position_pub_interval_perf);
 }
 
 void Xsens::publishGlobalPosition(const SensorData &data)
 {
+	if (!_global_position_pub) return;
+
 	hrt_abstime timestamp = hrt_absolute_time();
 
 	vehicle_global_position_s global_pos{};
@@ -956,7 +997,7 @@ void Xsens::publishGlobalPosition(const SensorData &data)
 	global_pos.terrain_alt = NAN;
 	global_pos.terrain_alt_valid = false;
 
-	_global_position_pub.publish(global_pos);
+	_global_position_pub->publish(global_pos);
 	perf_count(_global_position_pub_interval_perf);
 }
 
@@ -1155,6 +1196,16 @@ void Xsens::Run()
         parameter_update_s param_update;
         _parameter_update_sub.copy(&param_update);
         updateParams();
+
+        // If parameters changed and publishers not created yet, create them now
+        if (!_publishers_created) {
+            createPublishers();
+        }
+    }
+
+    // Create publishers on first run after parameters are loaded
+    if (!_publishers_created) {
+        createPublishers();
     }
 
     if (!_initialized) {
